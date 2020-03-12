@@ -107,7 +107,7 @@ public class EntityDemo {
 		
 		@Override
 		public String toString() {
-			return "[" + stamina + "m]";
+			return "[" + stamina + "]";
 		}
 	}
 	
@@ -139,10 +139,12 @@ public class EntityDemo {
 					
 				var c = (AddedStamina) o;
 				target.set(new Stamina((short) (stamina + c.stamina)));
+				System.out.println("Added stamina");
 			}, 
 			(e, clazz) -> {
 				var target = context.get(e.get(Effect.class).target.toString());
 				target.set(new Stamina((short) (target.get(Stamina.class).stamina - target.get(AddedStamina.class).stamina)));
+				System.out.println("Removed stamina");
 			}, 
 			AddedStamina.class, Effect.class);
 		
@@ -156,7 +158,7 @@ public class EntityDemo {
 		
 		var buff = context.newEntity();
 		buff.set(new Effect<>("Blessing of the Earth", player, player));
-		buff.set(new Timed(25_000)); // 25s
+		buff.set(new Timed(5_000)); // 5s
 		buff.set(new AddedStamina((short) 25));
 		System.out.println(buff);
 		
@@ -183,9 +185,29 @@ public class EntityDemo {
 			}
 		};
 		
+		Runnable buffSystem = new Runnable() {
+			
+			@Override
+			public void run() {
+				try {
+				var entities = context.get(Timed.class);
+				System.out.println("Tick ");
+				entities.forEach(entity -> {
+					System.out.println("Tick " + entity);
+					var timed = entity.get(Timed.class);
+					if (timed.start + timed.duration > System.currentTimeMillis())
+						context.destroy(entity.getId());
+				});
+				} catch(Exception e) {
+					e.printStackTrace();
+				}
+			}
+		};
+		
 		
 		
 		ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-		scheduler.scheduleAtFixedRate(movementSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);
+		//scheduler.scheduleAtFixedRate(movementSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);
+		scheduler.scheduleAtFixedRate(buffSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);
 	}
 }

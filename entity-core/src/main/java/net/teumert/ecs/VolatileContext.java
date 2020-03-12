@@ -74,8 +74,6 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 		@Override
 		public <T> T set (T value) {
 			var _return = super.set(value);
-			
-						
 			listeners.getOrDefault(value.getClass(), Collections.emptyList()).stream()
 				.filter(listener -> value.getClass().equals(listener.observedComponent()))
 				.filter(listener -> this.has(listener.requiredComponents()))
@@ -95,51 +93,9 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 		
 		@Override
 		public void clear() {
-			components.keySet().stream().forEach(this::remove);
+			Set.copyOf(components.keySet()).stream().forEach(this::remove);
 		}
 	}
-	
-	// ----------------------------------------------------------------------------------------------------------------
-	
-	/*protected class BasicEntitySystem<T> implements ComponentListener<Id, T> {
-		
-		private final Set<Entity<Id>> entities = new HashSet<>();
-		private final Collection<Class<?>> components;
-		
-		public BasicEntitySystem(Class<?>...components) {
-			this.components = List.of(components);
-		}
-
-		@Override
-		public Collection<Class<?>> requiredComponents() {
-			return components;
-		}
-
-		@Override
-		public void onSet(Entity<Id> entity, T value) {
-			// if (components.contains(value.getClass()))
-				entities.add(entity);
-			
-		}
-
-		@Override
-		public void onRemove(Entity<Id> entity, Class<T> component) {
-			// if (components.contains(component))
-				entities.remove(entity);
-		}
-		
-		public Set<Entity<Id>> getEntities() {
-			return Collections.unmodifiableSet(entities);
-		}
-
-		@Override
-		public Class<T> observedComponent() {
-			// TODO Auto-generated method stub
-			return null;
-		}
-	}*/
-	
-	// ----------------------------------------------------------------------------------------------------------------
 	
 	public static EntityContext<UUID> createUUIDContext() {
 		return new VolatileContext<>(UUID::randomUUID);
