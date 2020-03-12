@@ -1,26 +1,18 @@
 package net.teumert.ecs;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
 /**
- * A listener for an EntityContext, listening to changes in specific components.
  * 
  * @author Netzwerg
  *
  * @param <Id>
+ * @param <T>
  */
-public interface ComponentListener<Id> {
+public interface ComponentListener<Id, T> {
 	
-	public Class<?> observedComponent();
-	
-	/**
-	 * The components the listener is interested in.
-	 * @return
-	 */
-	public Collection<Class<?>> requiredComponents();
+	public Class<T> observedComponent();
 	
 	/**
 	 * Called *after* setting the component
@@ -29,7 +21,7 @@ public interface ComponentListener<Id> {
 	 * @param entity
 	 * @param value
 	 */
-	public void onSet(Entity<Id> entity, Object value);
+	public void set(Entity<Id> entity, T value);
 	
 	/**
 	 * Called *before* removing the component
@@ -37,7 +29,21 @@ public interface ComponentListener<Id> {
 	 * @param entity
 	 * @param component
 	 */
-	public <T> void onRemove(Entity<Id> entity, Class<T> clazz);
+	public void remove(Entity<Id> entity, Class<T> clazz);
+	
+	/**
+	 * Called to update the entity
+	 * 
+	 * @param entity
+	 * @param delta
+	 * @param unit
+	 */
+	public void update(Entity<Id> entity, long delta, TimeUnit unit);
+	
+	@FunctionalInterface
+	public interface Update<Id> {
+		public void apply(Entity<Id> entity, long delta, TimeUnit unit);
+	}
 	
 	/**
 	 * 
@@ -49,37 +55,33 @@ public interface ComponentListener<Id> {
 	 * @param required
 	 * @return
 	 */
-	public static <Id> ComponentListener<Id> newComponentListener (
-			final BiConsumer<Entity<Id>, Object> set, 
-			final BiConsumer<Entity<Id>, Class<?>> remove,
-			final Class<?> observed, final Class<?>... required) {
+	public static <Id, T> ComponentListener<Id, T> newComponentListener (
+			final BiConsumer<Entity<Id>, T> set, 
+			final BiConsumer<Entity<Id>, Class<T>> remove,
+			final Update<Id> update,
+			Class<T> observed) {
 		
-		final Collection<Class<?>> _required = Collections.unmodifiableCollection(Arrays.asList(required));
-		
-		return new ComponentListener<Id>() {
+		return new ComponentListener<Id, T>() {
 			
-
 			@Override
-			public Class<?> observedComponent() {
+			public Class<T> observedComponent() {
 				return observed;
 			}
 			
 			@Override
-			public Collection<Class<?>> requiredComponents() {
-				return _required;
+			public void set(Entity<Id> entity, T value) {
+				set.accept(entity, value);
 			}
 			
 			@Override
-			public void onSet(Entity<Id> entity, Object value) {
-				set.accept(entity, value);
+			public void remove(Entity<Id> entity, Class<T> clazz) {
+				remove.accept(entity, clazz);
 			}
 
 			@Override
-			public <T> void onRemove(Entity<Id> entity, Class<T> clazz) {
-				remove.accept(entity, clazz);
+			public void update(Entity<Id> entity, long delta, TimeUnit unit) {
+				update.apply(entity, delta, unit);
 			}
 		};
-		
-		
 	}
 }

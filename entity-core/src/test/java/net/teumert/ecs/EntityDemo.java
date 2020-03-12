@@ -58,7 +58,7 @@ public class EntityDemo {
 		
 		@Override
 		public String toString() {
-			return name + "[source=" + source + ", target=" + target +"]";
+			return "[name=" + name + ", source=" + source + ", target=" + target +"]";
 		}
 	}
 	
@@ -131,22 +131,11 @@ public class EntityDemo {
 		
 		// register stamina system (!)
 		
-		context.register(
-			(e, o) -> {
-				var target = context.get(e.get(Effect.class).target.toString());
-				
-				short stamina = target.getOrDefault(Stamina.class, () -> target.get(BaseStamina.class)).stamina;
-					
-				var c = (AddedStamina) o;
-				target.set(new Stamina((short) (stamina + c.stamina)));
-				System.out.println("Added stamina");
-			}, 
-			(e, clazz) -> {
-				var target = context.get(e.get(Effect.class).target.toString());
-				target.set(new Stamina((short) (target.get(Stamina.class).stamina - target.get(AddedStamina.class).stamina)));
-				System.out.println("Removed stamina");
-			}, 
-			AddedStamina.class, Effect.class);
+		
+		
+		// register timed system
+		
+		
 		
 		var player = context.get("player");
 		player.set(new Velocity(1d, 0d, 0d));
@@ -163,6 +152,12 @@ public class EntityDemo {
 		System.out.println(buff);
 		
 		System.out.println(player);
+		
+		var buff3 = context.newEntity();
+		buff3.set(new Effect<>("Blessing of the Mountain", player, player));
+		buff3.set(new Timed(5_000)); // 5s
+		buff3.set(new AddedStamina((short) 50));
+		System.out.println(buff3);
 		
 		
 		
@@ -185,29 +180,51 @@ public class EntityDemo {
 			}
 		};
 		
-		Runnable buffSystem = new Runnable() {
+		Runnable staminaSystem = new Runnable() {
 			
 			@Override
 			public void run() {
-				try {
-				var entities = context.get(Timed.class);
-				System.out.println("Tick ");
-				entities.forEach(entity -> {
-					System.out.println("Tick " + entity);
-					var timed = entity.get(Timed.class);
-					if (timed.start + timed.duration > System.currentTimeMillis())
-						context.destroy(entity.getId());
-				});
-				} catch(Exception e) {
+					try {
+						System.out.println("Doing tick...");
+						var entities = context.get(BaseStamina.class);
+						System.out.println(entities);
+						entities.forEach(entity -> {
+							entity.set(new Stamina(entity.get(BaseStamina.class).stamina));
+						});
+						entities = context.get(AddedStamina.class);
+						System.out.println(entities);
+						for (Entity<String> e : entities) {
+							if (!e.has(Effect.class))
+								continue;
+							var added = e.get(AddedStamina.class);
+							var target = context.get(e.get(Effect.class).target.toString());
+							
+							var current = target.getOrDefault(Stamina.class, target.get(BaseStamina.class));
+							System.out.println(added);
+							System.out.println(current);
+							target.set(new Stamina((short) (current.stamina + added.stamina)));
+						}
+				} catch (Exception e) {
 					e.printStackTrace();
 				}
 			}
+		};
+		
+		Runnable timerSystem = () -> {
+			var entities = context.get(Timed.class);
+			entities.forEach(entity -> {
+				var timed = entity.get(Timed.class);
+				if (System.currentTimeMillis() > timed.start + timed.duration)
+					context.destroy(entity.getId());
+			});
 		};
 		
 		
 		
 		ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 		//scheduler.scheduleAtFixedRate(movementSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);
-		scheduler.scheduleAtFixedRate(buffSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);
+		scheduler.scheduleAtFixedRate(staminaSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);
+		scheduler.scheduleAtFixedRate(timerSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);
+		scheduler.scheduleAtFixedRate(movementSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);
 	}
 }

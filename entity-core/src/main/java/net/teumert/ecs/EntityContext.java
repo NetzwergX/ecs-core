@@ -3,6 +3,8 @@ package net.teumert.ecs;
 import java.util.function.BiConsumer;
 import java.util.stream.Stream;
 
+import net.teumert.ecs.ComponentListener.Update;
+
 /**
  * A context managing entities in this entity-component system (ECS).
  * 
@@ -12,8 +14,6 @@ import java.util.stream.Stream;
  *
  * @param <Id>
  */
-// TODO add 2nd parameter T, so that ? extends T can be used
-// T can be either Object, Record or Component
 public interface EntityContext<Id> {
 	
 	public Entity<Id> newEntity();
@@ -24,24 +24,17 @@ public interface EntityContext<Id> {
 	public Iterable<Entity<Id>> get(Class<?>... components);
 	public Stream<Entity<Id>> stream(Class<?>... components);
 	
-	public void register(ComponentListener<Id> listener);
-	public void unregister(ComponentListener<Id> listener);
+	public <T> void register(ComponentListener<Id, T> listener);
+	public <T> void unregister(ComponentListener<Id, T> listener);
 	
-	default public ComponentListener<Id> register(
-			final BiConsumer<Entity<Id>, Object> set, 
-			final BiConsumer<Entity<Id>, Class<?>> remove, 
-			final Class<?> observed, final Class<?>... required) {
+	default public <T> ComponentListener<Id, T> register(
+			final BiConsumer<Entity<Id>, T> set, 
+			final BiConsumer<Entity<Id>, Class<T>> remove,
+			final Update<Id> update,
+			final Class<T> observed) {
 		
-		var listener = ComponentListener.newComponentListener(set, remove, observed, required);
+		var listener = ComponentListener.newComponentListener(set, remove, update, observed);
 		this.register(listener);
 		return listener;
-	}
-	
-	default public <T> ComponentListener<Id> register(
-			final BiConsumer<Entity<Id>, Object> set, 
-			final BiConsumer<Entity<Id>, Class<?>> remove, 
-			final Class<?> observed) {
-		
-		return register(set, remove, observed, new Class<?>[] {});
 	}
 }

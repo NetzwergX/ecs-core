@@ -4,7 +4,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -18,7 +17,7 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 	private final Supplier<Id> nextId;
 	
 	private final Map<Id, Entity<Id>> entities = new HashMap<>();
-	private final Map<Class<?>, Collection<ComponentListener<Id>>> listeners = new HashMap<>();
+	private final Map<Class<?>, Collection<ComponentListener<Id, ?>>> listeners = new HashMap<>();
 	
 	// TODO lookup by component caching...
 	
@@ -55,12 +54,12 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 	}
 	
 	@Override
-	public void register(ComponentListener<Id> listener) {
+	public <T> void register(ComponentListener<Id, T> listener) {
 		listeners.computeIfAbsent(listener.observedComponent(), key -> new HashSet<>()).add(listener);
 	}
-	
+
 	@Override
-	public void unregister(ComponentListener<Id> listener) {
+	public <T> void unregister(ComponentListener<Id, T> listener) {
 		listeners.getOrDefault(listener.observedComponent(), Collections.emptySet()).remove(listener);
 	}
 	
@@ -71,23 +70,25 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 				super (VolatileContext.this, id);
 		}
 		
+		
 		@Override
+		@SuppressWarnings("unchecked")
 		public <T> T set (T value) {
 			var _return = super.set(value);
 			listeners.getOrDefault(value.getClass(), Collections.emptyList()).stream()
 				.filter(listener -> value.getClass().equals(listener.observedComponent()))
-				.filter(listener -> this.has(listener.requiredComponents()))
-				//.map(listener -> listener.getAs(value.getClass()))
-				.forEach(listener -> listener.onSet(this, value));
+				.map(listener -> (ComponentListener<Id, T>) listener)
+				.forEach(listener -> listener.set(this, value));
 			return _return;
 		}
 		
 		@Override
+		@SuppressWarnings("unchecked")
 		public <T> T remove(Class<T> clazz) {
 			listeners.getOrDefault(clazz, Collections.emptyList()).stream()
 				.filter(listener -> clazz.equals(listener.observedComponent()))
-				.filter(listener -> this.has(listener.requiredComponents()))
-				.forEach(listener -> listener.onRemove(this, clazz));
+				.map(listener -> (ComponentListener<Id, T>) listener)
+				.forEach(listener -> listener.remove(this, clazz));
 			return super.remove(clazz);
 		}
 		
