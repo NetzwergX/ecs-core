@@ -2,6 +2,7 @@ package net.teumert.ecs;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.function.BiConsumer;
 
 /**
@@ -13,11 +14,13 @@ import java.util.function.BiConsumer;
  */
 public interface ComponentListener<Id> {
 	
+	public Class<?> observedComponent();
+	
 	/**
 	 * The components the listener is interested in.
 	 * @return
 	 */
-	public Collection<Class<?>> getComponents();
+	public Collection<Class<?>> requiredComponents();
 	
 	/**
 	 * Called *after* setting the component
@@ -34,29 +37,49 @@ public interface ComponentListener<Id> {
 	 * @param entity
 	 * @param component
 	 */
-	public void onRemove(Entity<Id> entity, Class<?> component);
+	public <T> void onRemove(Entity<Id> entity, Class<T> clazz);
 	
+	/**
+	 * 
+	 * @param <Id>
+	 * @param <T>
+	 * @param set
+	 * @param remove
+	 * @param observed
+	 * @param required
+	 * @return
+	 */
 	public static <Id> ComponentListener<Id> newComponentListener (
 			final BiConsumer<Entity<Id>, Object> set, 
-			final BiConsumer<Entity<Id>, Class<?>> remove, 
-			final Class<?>... components) {
+			final BiConsumer<Entity<Id>, Class<?>> remove,
+			final Class<?> observed, final Class<?>... required) {
+		
+		final Collection<Class<?>> _required = Collections.unmodifiableCollection(Arrays.asList(required));
 		
 		return new ComponentListener<Id>() {
+			
 
 			@Override
-			public Collection<Class<?>> getComponents() {
-				return Arrays.asList(components);
+			public Class<?> observedComponent() {
+				return observed;
+			}
+			
+			@Override
+			public Collection<Class<?>> requiredComponents() {
+				return _required;
+			}
+			
+			@Override
+			public void onSet(Entity<Id> entity, Object value) {
+				set.accept(entity, value);
 			}
 
 			@Override
-			public  void onSet(Entity<Id> entity, Object value) {
-				set.accept(entity, value);				
-			}
-
-			@Override
-			public void onRemove(Entity<Id> entity, Class<?> component) {
-				remove.accept(entity, component);
+			public <T> void onRemove(Entity<Id> entity, Class<T> clazz) {
+				remove.accept(entity, clazz);
 			}
 		};
+		
+		
 	}
 }

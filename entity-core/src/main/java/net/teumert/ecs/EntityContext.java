@@ -12,6 +12,8 @@ import java.util.stream.Stream;
  *
  * @param <Id>
  */
+// TODO add 2nd parameter T, so that ? extends T can be used
+// T can be either Object, Record or Component
 public interface EntityContext<Id> {
 	
 	public Entity<Id> newEntity();
@@ -28,10 +30,18 @@ public interface EntityContext<Id> {
 	default public ComponentListener<Id> register(
 			final BiConsumer<Entity<Id>, Object> set, 
 			final BiConsumer<Entity<Id>, Class<?>> remove, 
-			final Class<?>... components) {
+			final Class<?> observed, final Class<?>... required) {
 		
-		var listener = ComponentListener.newComponentListener(set, remove, components);
+		var listener = ComponentListener.newComponentListener(set, remove, observed, required);
 		this.register(listener);
 		return listener;
+	}
+	
+	default public <T> ComponentListener<Id> register(
+			final BiConsumer<Entity<Id>, Object> set, 
+			final BiConsumer<Entity<Id>, Class<?>> remove, 
+			final Class<?> observed) {
+		
+		return register(set, remove, observed, new Class<?>[] {});
 	}
 }

@@ -56,16 +56,12 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 	
 	@Override
 	public void register(ComponentListener<Id> listener) {
-		listener.getComponents()
-			.forEach(component -> listeners.computeIfAbsent(component, key -> new HashSet<>()).add(listener));
-		
+		listeners.computeIfAbsent(listener.observedComponent(), key -> new HashSet<>()).add(listener);
 	}
 	
 	@Override
 	public void unregister(ComponentListener<Id> listener) {
-		listener.getComponents()
-			.forEach(component -> listeners.getOrDefault(component, Collections.emptySet()).remove(listener));
-		
+		listeners.getOrDefault(listener.observedComponent(), Collections.emptySet()).remove(listener);
 	}
 	
 	// ----------------------------------------------------------------------------------------------------------------
@@ -78,8 +74,12 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 		@Override
 		public <T> T set (T value) {
 			var _return = super.set(value);
+			
+						
 			listeners.getOrDefault(value.getClass(), Collections.emptyList()).stream()
-				.filter(system -> this.has(system.getComponents()))
+				.filter(listener -> value.getClass().equals(listener.observedComponent()))
+				.filter(listener -> this.has(listener.requiredComponents()))
+				//.map(listener -> listener.getAs(value.getClass()))
 				.forEach(listener -> listener.onSet(this, value));
 			return _return;
 		}
@@ -87,7 +87,8 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 		@Override
 		public <T> T remove(Class<T> clazz) {
 			listeners.getOrDefault(clazz, Collections.emptyList()).stream()
-				.filter(system -> this.has(system.getComponents()))
+				.filter(listener -> clazz.equals(listener.observedComponent()))
+				.filter(listener -> this.has(listener.requiredComponents()))
 				.forEach(listener -> listener.onRemove(this, clazz));
 			return super.remove(clazz);
 		}
@@ -100,7 +101,7 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 	
 	// ----------------------------------------------------------------------------------------------------------------
 	
-	protected class BasicEntitySystem implements ComponentListener<Id> {
+	/*protected class BasicEntitySystem<T> implements ComponentListener<Id, T> {
 		
 		private final Set<Entity<Id>> entities = new HashSet<>();
 		private final Collection<Class<?>> components;
@@ -110,19 +111,19 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 		}
 
 		@Override
-		public Collection<Class<?>> getComponents() {
+		public Collection<Class<?>> requiredComponents() {
 			return components;
 		}
 
 		@Override
-		public void onSet(Entity<Id> entity, Object value) {
+		public void onSet(Entity<Id> entity, T value) {
 			// if (components.contains(value.getClass()))
 				entities.add(entity);
 			
 		}
 
 		@Override
-		public void onRemove(Entity<Id> entity, Class<?> component) {
+		public void onRemove(Entity<Id> entity, Class<T> component) {
 			// if (components.contains(component))
 				entities.remove(entity);
 		}
@@ -130,7 +131,13 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 		public Set<Entity<Id>> getEntities() {
 			return Collections.unmodifiableSet(entities);
 		}
-	}
+
+		@Override
+		public Class<T> observedComponent() {
+			// TODO Auto-generated method stub
+			return null;
+		}
+	}*/
 	
 	// ----------------------------------------------------------------------------------------------------------------
 	

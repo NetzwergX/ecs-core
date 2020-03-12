@@ -1,6 +1,7 @@
 package net.teumert.ecs;
 
 import java.util.Collection;
+import java.util.function.Supplier;
 
 /**
  * <p>An entity in a entity-component system (ECS) is a collection of components.</p>
@@ -31,6 +32,22 @@ public interface Entity<Id> {
 	public <T> T get(Class<T> clazz);
 	public <T> T set(T value);
 	public <T> T remove(Class<T> clazz);
+	
+	default public <T> T getOrDefault(Class<T> clazz, Supplier<T> value) {
+		if (has(clazz))
+			return get(clazz);
+		else return value.get();
+	}
+	
+	default public <T> T getOrDefault(Class<T> clazz, T value) {
+		if (has(clazz))
+			return get(clazz);
+		else return value;
+	}
+	// setIfAbsent
+	//public <T> T getOrSet(Class<T> clazz, T value);
+	
+	// clone entity? merge entities?
 	
 	public Iterable<Class<?>> components();
 

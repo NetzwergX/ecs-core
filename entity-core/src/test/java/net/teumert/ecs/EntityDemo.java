@@ -40,21 +40,131 @@ public class EntityDemo {
 		}
 	}
 	
+	public static class Effect<Id> {
+		
+		public final Id source, target;
+		
+		public final String name;
+		
+		public Effect(String name, Id source, Id target) {
+			this.name = name;
+			this.source = source;
+			this.target = target;
+		}
+		
+		public Effect(String name, Entity<Id> source, Entity<Id> target) {
+			this(name, source.getId(), target.getId());
+		}
+		
+		@Override
+		public String toString() {
+			return name + "[source=" + source + ", target=" + target +"]";
+		}
+	}
+	
+	public static class Timed {
+		
+		public final long start, duration;
+		
+		public Timed(long start, long duration) {
+			this.start = start;
+			this.duration = duration;
+		}
+		
+		public Timed (long duration) {
+			this.start = System.currentTimeMillis();
+			this.duration = duration;
+		}
+		
+		@Override
+		public String toString() {
+			return "[" + start + ", " + duration+"]";
+		}
+		
+	}
+	
+	public static class Ranged {
+		
+		public final float range;
+		
+		public Ranged(float range) {
+			this.range = range;
+		}
+		
+		@Override
+		public String toString() {
+			return "[" + range + "m]";
+		}
+	}
+	
+	public static class Stamina {
+		
+		public final short stamina;
+		
+		public Stamina(short stamina) {
+			this.stamina = stamina;
+		}
+		
+		@Override
+		public String toString() {
+			return "[" + stamina + "m]";
+		}
+	}
+	
+	public static class BaseStamina extends Stamina {
+
+		public BaseStamina(short stamina) {
+			super(stamina);
+		}
+		
+	}
+	
+	public static class AddedStamina extends Stamina {
+
+		public AddedStamina(short stamina) {
+			super(stamina);
+		}
+	}
+	
 	public static void main(String[] args) {
 		var context = VolatileContext.createStringContext();
 		
+		// register stamina system (!)
+		
+		context.register(
+			(e, o) -> {
+				var target = context.get(e.get(Effect.class).target.toString());
+				
+				short stamina = target.getOrDefault(Stamina.class, () -> target.get(BaseStamina.class)).stamina;
+					
+				var c = (AddedStamina) o;
+				target.set(new Stamina((short) (stamina + c.stamina)));
+			}, 
+			(e, clazz) -> {
+				var target = context.get(e.get(Effect.class).target.toString());
+				target.set(new Stamina((short) (target.get(Stamina.class).stamina - target.get(AddedStamina.class).stamina)));
+			}, 
+			AddedStamina.class, Effect.class);
+		
 		var player = context.get("player");
-		player.set(new Velocity(1d, 0d, .1d));
-		player.set(new Position(0d, 1d, 0d));
+		player.set(new Velocity(1d, 0d, 0d));
+		player.set(new Position(0d, 0d, 0d));
+		player.set(new BaseStamina((short) 100));
 		
 		System.out.println(player);
 		
-		var weapon = context.newEntity();
-		//var weaponId = weapon.getId();
-		System.out.println(weapon);
+		
+		var buff = context.newEntity();
+		buff.set(new Effect<>("Blessing of the Earth", player, player));
+		buff.set(new Timed(25_000)); // 25s
+		buff.set(new AddedStamina((short) 25));
+		System.out.println(buff);
+		
+		System.out.println(player);
+		
+		
 		
 		final int DELTA_T = 1000;
-		
 		Runnable movementSystem = new Runnable() {
 			
 			@Override
@@ -72,6 +182,8 @@ public class EntityDemo {
 				
 			}
 		};
+		
+		
 		
 		ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 		scheduler.scheduleAtFixedRate(movementSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);
