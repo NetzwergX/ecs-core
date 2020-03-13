@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 @SuppressWarnings("unchecked")
 public abstract class AbstractEntity<Id> implements Entity<Id> {
@@ -58,7 +59,7 @@ public abstract class AbstractEntity<Id> implements Entity<Id> {
 	
 	@Override
 	public void clear() {
-		components.clear();
+		Set.copyOf(components.keySet()).stream().forEach(this::remove);
 	}
 	
 	@Override

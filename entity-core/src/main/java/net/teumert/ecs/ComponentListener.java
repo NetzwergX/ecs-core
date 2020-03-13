@@ -10,6 +10,7 @@ import java.util.function.BiConsumer;
  * @param <Id>
  * @param <T>
  */
+// ComponentListener <Id, T extends B, B>, if B becomes base type in ctx
 public interface ComponentListener<Id, T> {
 	
 	public Class<T> observedComponent();

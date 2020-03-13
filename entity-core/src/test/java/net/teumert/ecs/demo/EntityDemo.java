@@ -1,9 +1,14 @@
-package net.teumert.ecs;
+package net.teumert.ecs.demo;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
 
+import net.teumert.ecs.Entity;
+import net.teumert.ecs.EntityContext;
 import net.teumert.ecs.VolatileContext;
 
 public class EntityDemo {
@@ -40,6 +45,19 @@ public class EntityDemo {
 		}
 	}
 	
+	public static class Name {
+		public final String name;
+		
+		public Name(String name) {
+			this.name = name;
+		}
+		
+		@Override
+		public String toString() {
+			return name;
+		}
+	}
+	
 	public static class Effect<Id> {
 		
 		public final Id source, target;
@@ -62,32 +80,39 @@ public class EntityDemo {
 		}
 	}
 	
-	public static class Timed {
+	public static class Duration {
 		
-		public final long start, duration;
+		public final long startMs, durationMs;
 		
-		public Timed(long start, long duration) {
-			this.start = start;
-			this.duration = duration;
+		public Duration(long start, long duration) {
+			this.startMs = start;
+			this.durationMs = duration;
 		}
 		
-		public Timed (long duration) {
-			this.start = System.currentTimeMillis();
-			this.duration = duration;
+		public Duration (long duration) {
+			this.startMs = System.currentTimeMillis();
+			this.durationMs = duration;
 		}
 		
 		@Override
 		public String toString() {
-			return "[" + start + ", " + duration+"]";
+			var _instant = Instant.ofEpochMilli(startMs).atZone(ZoneId.systemDefault());
+			var _duration = java.time.Duration.ofMillis(durationMs);
+			return "[start=" + _instant.format(DateTimeFormatter.ISO_TIME) 
+				+ ", duration=" 
+					+ _duration.toMinutesPart()
+					+ ":" + _duration.toSecondsPart()
+					+ "." + _duration.toMillisPart()
+			+"]";
 		}
 		
 	}
 	
-	public static class Ranged {
+	public static class Range {
 		
 		public final float range;
 		
-		public Ranged(float range) {
+		public Range(float range) {
 			this.range = range;
 		}
 		
@@ -126,18 +151,51 @@ public class EntityDemo {
 		}
 	}
 	
+	public static class CharacterSheet {
+		
+		public static final Map<String, Class<?>> COMPONENTS = new HashMap<>();
+		
+		static {
+			COMPONENTS.put("stamina", Stamina.class);
+		}
+		
+		public static <Id> String buildSheet(EntityContext<Id> context, Entity<Id> entity) {
+			StringBuilder builder = new StringBuilder()
+					.append("┌").append("─".repeat(40)).append("┐\n");
+			
+			builder.append("│ ").append(String.format("%-38s", entity.get(Name.class))).append(" |\n");
+			builder.append("├").append("┄".repeat(40)).append("┤\n");
+			
+			COMPONENTS.forEach((key, clazz) -> {
+				builder.append("│ ").append(String.format("%-27s %10s", key, entity.get(clazz))).append(" │\n");
+			});
+			
+			builder.append("├").append("┄".repeat(40)).append("┤\n");
+			
+			context.stream(Effect.class)
+				.filter(e -> e.get(Effect.class).target.equals(entity.getId()))
+				.forEach(e -> builder.append("│ ").append(
+						String.format("%-27s %10s", 
+								e.get(Effect.class).name, 
+								e.has(Duration.class) ? formatDuration(e.get(Duration.class).durationMs) : "")).append(" │\n"));
+			
+			return builder
+					.append("└").append("─".repeat(40)).append("┘\n")
+					.toString();
+		}
+		
+		public static String formatDuration(long ms) {
+			var duration = java.time.Duration.ofMillis(ms);
+			return String.format("%02d:%02d.%02d", 
+					duration.toMinutesPart(), duration.toSecondsPart(),duration.toMillisPart());
+		}
+		
+	}
+	
 	public static void main(String[] args) {
 		var context = VolatileContext.createStringContext();
-		
-		// register stamina system (!)
-		
-		
-		
-		// register timed system
-		
-		
-		
 		var player = context.get("player");
+		player.set(new Name("Netzwerg"));
 		player.set(new Velocity(1d, 0d, 0d));
 		player.set(new Position(0d, 0d, 0d));
 		player.set(new BaseStamina((short) 100));
@@ -145,9 +203,10 @@ public class EntityDemo {
 		System.out.println(player);
 		
 		
+		
 		var buff = context.newEntity();
 		buff.set(new Effect<>("Blessing of the Earth", player, player));
-		buff.set(new Timed(5_000)); // 5s
+		buff.set(new Duration(15_000)); // 5s
 		buff.set(new AddedStamina((short) 25));
 		System.out.println(buff);
 		
@@ -155,10 +214,20 @@ public class EntityDemo {
 		
 		var buff3 = context.newEntity();
 		buff3.set(new Effect<>("Blessing of the Mountain", player, player));
-		buff3.set(new Timed(5_000)); // 5s
+		buff3.set(new Duration(5_000)); // 5s
 		buff3.set(new AddedStamina((short) 50));
 		System.out.println(buff3);
 		
+		System.out.println(CharacterSheet.buildSheet(context, player));
+		
+		// get all buffs on player
+		
+		var buffs = context.stream(Effect.class)
+				.filter(e -> e.get(Effect.class).target.equals(player.getId()))
+				.collect(Collectors.toList());
+		System.out.println(buffs);
+		
+		System.out.println("------------------------------------------------------------");
 		
 		
 		final int DELTA_T = 1000;
@@ -211,20 +280,21 @@ public class EntityDemo {
 		};
 		
 		Runnable timerSystem = () -> {
-			var entities = context.get(Timed.class);
+			var entities = context.get(Duration.class);
 			entities.forEach(entity -> {
-				var timed = entity.get(Timed.class);
-				if (System.currentTimeMillis() > timed.start + timed.duration)
+				var duration = entity.get(Duration.class);
+				if (System.currentTimeMillis() > duration.startMs + duration.durationMs)
 					context.destroy(entity.getId());
 			});
 		};
 		
 		
 		
-		ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+		
+		/*ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 		//scheduler.scheduleAtFixedRate(movementSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);
 		scheduler.scheduleAtFixedRate(staminaSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);
 		scheduler.scheduleAtFixedRate(timerSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);
-		scheduler.scheduleAtFixedRate(movementSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);
+		scheduler.scheduleAtFixedRate(movementSystem, 0, DELTA_T, TimeUnit.MILLISECONDS);*/
 	}
 }

@@ -5,7 +5,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -18,6 +17,8 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 	
 	private final Map<Id, Entity<Id>> entities = new HashMap<>();
 	private final Map<Class<?>, Collection<ComponentListener<Id, ?>>> listeners = new HashMap<>();
+	
+	//private final Map<Class<?>, Collection<Class<?>>> interfaceCache = new HashMap<>();
 	
 	// TODO lookup by component caching...
 	
@@ -70,7 +71,6 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 				super (VolatileContext.this, id);
 		}
 		
-		
 		@Override
 		@SuppressWarnings("unchecked")
 		public <T> T set (T value) {
@@ -90,11 +90,6 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 				.map(listener -> (ComponentListener<Id, T>) listener)
 				.forEach(listener -> listener.remove(this, clazz));
 			return super.remove(clazz);
-		}
-		
-		@Override
-		public void clear() {
-			Set.copyOf(components.keySet()).stream().forEach(this::remove);
 		}
 	}
 	
