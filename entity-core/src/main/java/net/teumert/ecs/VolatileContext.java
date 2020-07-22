@@ -5,8 +5,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -15,12 +17,15 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 	
 	private final Supplier<Id> nextId;
 	
-	private final Map<Id, Entity<Id>> entities = new HashMap<>();
-	private final Map<Class<?>, Collection<ComponentListener<Id, ?>>> listeners = new HashMap<>();
+	private final Map<Id, Entity<Id>> idToEntity = new HashMap<>();
 	
-	//private final Map<Class<?>, Collection<Class<?>>> interfaceCache = new HashMap<>();
+	private final Map<Class<?>, Set<Entity<Id>>> componentToEntities = new HashMap<>();
 	
-	// TODO lookup by component caching...
+	private final Map<Class<?>, Set<BiConsumer<?, Entity<Id>>>> 
+		componentSetListener = new HashMap<>();
+	
+	private final Map<Class<?>, Set<BiConsumer<?, Entity<Id>>>> 
+		componentRemoveListener = new HashMap<>();
 	
 	public VolatileContext(Supplier<Id> idFactory) {
 		this.nextId = idFactory;
@@ -28,40 +33,51 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 	
 	@Override
 	public Entity<Id> newEntity() {
-		return entities.computeIfAbsent(nextId.get(), VolatileEntity::new);
+		return idToEntity.computeIfAbsent(nextId.get(), VolatileEntity::new);
 	}
 	
 	@Override
 	public void destroy(Id id) {
-		entities.get(id).clear();
-		entities.remove(id);
+		idToEntity.get(id).clear();
+		idToEntity.remove(id);
 	}
 	
 	@Override
 	public Entity<Id> get (Id id) {
-		return entities.get(id);
+		return idToEntity.get(id);
 	}
 	
 	@Override
-	public Iterable<Entity<Id>> get(Class<?>... components) {
+	public Iterable<Entity<Id>> list(Class<?>... components) {
 		return stream(components)
 				.collect(Collectors.toList());
 	}
 	
 	@Override
 	public Stream<Entity<Id>> stream(Class<?>... components) {
-		return entities.values().stream()
+		return idToEntity.values().stream()
 				.filter(entity -> entity.has(components));
-	}
-	
-	@Override
-	public <T> void register(ComponentListener<Id, T> listener) {
-		listeners.computeIfAbsent(listener.observedComponent(), key -> new HashSet<>()).add(listener);
 	}
 
 	@Override
-	public <T> void unregister(ComponentListener<Id, T> listener) {
-		listeners.getOrDefault(listener.observedComponent(), Collections.emptySet()).remove(listener);
+	public Collection<Entity<Id>> with(Class<?> component) {
+		return Collections.unmodifiableCollection(componentToEntities.get(component));
+	}
+	
+	@Override
+	public <T> void onComponentSet
+	(Class<T> component, BiConsumer<T, Entity<Id>> listener) {
+		componentSetListener
+			.computeIfAbsent(component, key -> new HashSet<>())
+			.add(listener);
+	}
+
+	@Override
+	public <T> void onComponentRemove
+	(Class<T> component, BiConsumer<Class<T>, Entity<Id>> listener) {
+		componentRemoveListener
+			.computeIfAbsent(component, key -> new HashSet<>())
+			.add(listener);
 	}
 	
 	// ----------------------------------------------------------------------------------------------------------------
@@ -75,20 +91,30 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 		@SuppressWarnings("unchecked")
 		public <T> T set (T value) {
 			var _return = super.set(value);
-			listeners.getOrDefault(value.getClass(), Collections.emptyList()).stream()
-				.filter(listener -> value.getClass().equals(listener.observedComponent()))
-				.map(listener -> (ComponentListener<Id, T>) listener)
-				.forEach(listener -> listener.set(this, value));
+			componentToEntities
+				.computeIfAbsent(value.getClass(), key -> new HashSet<>())
+				.add(this);
+			componentSetListener
+				.computeIfAbsent(value.getClass(), key -> new HashSet<>())
+				.forEach(action -> 
+					((BiConsumer<T, Entity<Id>>) action).accept(value, this));
 			return _return;
 		}
 		
 		@Override
 		@SuppressWarnings("unchecked")
 		public <T> T remove(Class<T> clazz) {
-			listeners.getOrDefault(clazz, Collections.emptyList()).stream()
-				.filter(listener -> clazz.equals(listener.observedComponent()))
-				.map(listener -> (ComponentListener<Id, T>) listener)
-				.forEach(listener -> listener.remove(this, clazz));
+			componentToEntities.computeIfAbsent(clazz, key -> new HashSet<>()).remove(this);
+			//if (componentToEntities.get(clazz).isEmpty())
+			//	componentToEntities.remove(clazz);
+			// leads to recreation of the list, invalidating unmodifiable views
+			// which is undesired. The # of component types should be small, even
+			// it it goes into the hundreds there should not be too great of a memory
+			// impact when keeping those references
+			componentRemoveListener
+				.computeIfAbsent(clazz, key -> new HashSet<>())
+				.forEach(action ->
+					((BiConsumer<Class<T>, Entity<Id>>) action).accept(clazz, this));
 			return super.remove(clazz);
 		}
 	}
@@ -117,7 +143,7 @@ public class VolatileContext<Id> implements EntityContext<Id> {
 		
 		@Override
 		public Entity<String> get(String id) {
-			return super.entities.computeIfAbsent(id, VolatileEntity::new);
+			return super.idToEntity.computeIfAbsent(id, VolatileEntity::new);
 		}
 	}
 }

@@ -7,18 +7,20 @@ import java.util.function.Supplier;
  * <p>An entity in a entity-component system (ECS) is a collection of components.</p>
  * 
  * <p>
- * 	In order to unqiuely identify an entity for the purposes of lookup, a generic `Id` is used. 
- * 	Ids MUST be immutable.
+ * 	Conceptually, entities are just something that uniquely identifies their set
+ * 	of components. Implementation-wise, an entity is represented by a unique,
+ * 	immutable object. There are no other restrictions on ids beyong that.
  * </p>
  * 
  * <p>
- * 	This class encapsulates entities as an object and offers some convenience methods to inspect entities, like
- * 	checking if an entity has a component or a specific set of components.
+ * 	This class encapsulates entities as an object and offers some convenience 
+ * 	methods to inspect entities, like checking if an entity has a component or 
+ * 	a specific set of components.
  * </p>
  * 
- * @author Netzwerg
+ * @author Sebastian Teumert
  *
- * @param <Id>
+ * @param <Id> the type of the Id used to uniquely identify this entity.
  */
 public interface Entity<Id> {
 
@@ -44,10 +46,6 @@ public interface Entity<Id> {
 			return get(clazz);
 		else return value;
 	}
-	// setIfAbsent
-	//public <T> T getOrSet(Class<T> clazz, T value);
-	
-	// clone entity? merge entities?
 	
 	public Iterable<Class<?>> components();
 
